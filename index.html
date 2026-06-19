@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>GPS Distance Recorder v8.0</title>
+<style>
+:root{--bg:#f3f6fa;--card:#fff;--ink:#132233;--muted:#5c6b7a;--line:#d5dee8;--accent:#123b66;--good:#1f7a35;--warn:#c46a00;--bad:#b42318;--soft:#eef3f8;--disabled:#e8edf3}
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+.app{max-width:560px;margin:0 auto;padding:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 6px 18px rgba(0,0,0,.07)}
+h1{margin:0 0 4px;font-size:1.35rem;color:var(--accent)}h2{margin:0 0 10px;font-size:1.05rem;color:var(--accent)}
+.sub{color:var(--muted);font-size:.9rem;line-height:1.35}.small{font-size:.82rem;color:var(--muted);line-height:1.35;margin-top:4px}
+button{width:100%;border:0;border-radius:14px;padding:14px;margin-top:10px;font-size:1rem;font-weight:bold;cursor:pointer;touch-action:manipulation}
+button:disabled{opacity:.65;cursor:not-allowed;background:var(--disabled)!important;color:#6c7885!important;border:1px solid #cbd7e4!important}
+.btn-primary{background:var(--accent);color:white}.btn-secondary{background:var(--soft);color:var(--accent);border:1px solid #cbd7e4}.btn-good{background:var(--good);color:white}.btn-bad{background:var(--bad);color:white}.btn-warn{background:var(--warn);color:white}
+.status{font-weight:bold;font-size:.95rem;margin-top:8px}.status.good{color:var(--good)}.status.wait{color:var(--warn)}.status.bad{color:var(--bad)}
+.metric,.big-line{display:grid;grid-template-columns:135px 1fr;gap:8px;padding:8px 0;border-top:1px solid #edf1f5;align-items:center}.metric:first-child,.big-line:first-child{border-top:0}
+.metric-label,.big-label{color:var(--muted);font-size:.85rem;font-weight:bold}.metric-value,.big-value{font-family:"Courier New",monospace;font-weight:bold;font-size:1rem;overflow-wrap:anywhere}.big-value{font-size:1.08rem}
+.big-result{background:#f7fafc;border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:10px}
+input,textarea{width:100%;border:1px solid #cbd7e4;border-radius:10px;padding:10px;font-size:.95rem;margin:4px 0 8px;background:#fff;color:var(--ink);-webkit-user-select:text;user-select:text}
+input{font-family:"Courier New",monospace}textarea{font-family:Arial,Helvetica,sans-serif;min-height:68px;resize:vertical}.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.point{border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:8px;background:#fbfdff;font-size:.92rem;border-left:6px solid var(--accent)}
+.point.start{border-left-color:var(--good)}.point.target{border-left-color:var(--warn);background:#fffaf0}.point.done{opacity:.72}.quality-good{color:var(--good)}.quality-warn{color:var(--warn)}.quality-bad{color:var(--bad)}
+.badge{display:inline-block;border-radius:999px;padding:3px 8px;background:var(--soft);border:1px solid #cbd7e4;color:var(--accent);font-weight:bold;font-size:.78rem;margin-left:4px}.badge.good{background:#eef9f0;color:var(--good);border-color:#cdebd2}.badge.warn{background:#fff6e8;color:var(--warn);border-color:#f0d5ad}.badge.bad{background:#fff0ee;color:var(--bad);border-color:#efc7c2}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="card">
+    <h1>GPS Distance Recorder v8.0</h1>
+    <div class="sub">Route distance verifier. V8 keeps GPS Field import separate and clearly labelled from Distance session save/load.</div>
+  </div>
+
+  <div class="card">
+    <h2>1. Live GPS</h2>
+    <div class="sub">GPS remains live. Recording controls whether distance is added while driving.</div>
+    <button class="btn-warn" id="recordBtn">Start Recording</button>
+    <div class="status wait" id="recordStatus">Recording PAUSED - distance not being added</div>
+    <div class="status wait" id="wakeStatus">Stay Awake follows recording</div>
+    <div class="big-result">
+      <div class="big-line"><div class="big-label">Live Lat/Lon</div><div class="big-value" id="liveLatLon">--</div></div>
+      <div class="big-line"><div class="big-label">Live Accuracy</div><div class="big-value" id="liveAccuracy">--</div></div>
+      <div class="big-line"><div class="big-label">Speed</div><div class="big-value" id="liveSpeed">--</div></div>
+      <div class="big-line"><div class="big-label">Distance</div><div class="big-value" id="liveDistance">0.000 km</div></div>
+      <div class="big-line"><div class="big-label">Driving GPS points</div><div class="big-value" id="drivingPoints">0</div></div>
+      <div class="big-line"><div class="big-label">GPS State</div><div class="big-value" id="gpsState">Starting GPS</div></div>
+      <div class="big-line"><div class="big-label">GPS Age</div><div class="big-value" id="gpsAge">--</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. GPS Field Import</h2>
+    <div class="sub">Import the JSON file exported by GPS Field. Imported points become the ordered target list. New Distance waypoints remain separate and do not renumber this list.</div>
+    <button class="btn-primary" id="importFieldBtn">Import from GPS Field</button>
+    <input id="fieldImportFile" type="file" accept="application/json,.json" style="display:none">
+    <div class="big-result">
+      <div class="metric"><div class="metric-label">Loaded route</div><div class="metric-value" id="fieldRouteName">--</div></div>
+      <div class="metric"><div class="metric-label">Rally / Day</div><div class="metric-value" id="fieldRallyDay">--</div></div>
+      <div class="metric"><div class="metric-label">Targets</div><div class="metric-value" id="fieldTargetCount">0</div></div>
+      <div class="metric"><div class="metric-label">Current target</div><div class="metric-value" id="fieldCurrentTarget">--</div></div>
+    </div>
+    <div class="row2">
+      <button class="btn-secondary" id="prevTargetBtn">Previous Target</button>
+      <button class="btn-secondary" id="nextTargetBtn">Next Target</button>
+    </div>
+    <div id="fieldTargetList"><div class="small">No GPS Field route imported yet.</div></div>
+  </div>
+
+  <div class="card">
+    <h2>3. Capture Waypoint</h2>
+    <div class="sub">Enter waypoint details, press Gather Waypoint GPS, review the pending result, then Save Waypoint. Press Gather Again to replace a poor pending capture.</div>
+    <div class="row2">
+      <div><div class="small">Waypoint number</div><input id="wpNumber" value="1" inputmode="text"></div>
+      <div><div class="small">Samples</div><input id="sampleDisplay" value="0 / 20" readonly></div>
+    </div>
+    <div class="small">Name / note</div><textarea id="wpNote" placeholder="Example: Ruby Way, 90 sign, start point"></textarea>
+    <button class="btn-primary" id="captureBtn">GPS Warm-up</button>
+    <div class="status wait" id="captureStatus">Waiting for GPS warm-up</div>
+    <div class="big-result">
+      <div class="metric"><div class="metric-label">Rejected</div><div class="metric-value" id="captureRejected">0</div></div>
+      <div class="metric"><div class="metric-label">Live Accuracy</div><div class="metric-value" id="captureLiveAccuracy">--</div></div>
+      <div class="metric"><div class="metric-label">Capture Quality</div><div class="metric-value" id="captureQuality">--</div></div>
+      <div class="metric"><div class="metric-label">Capture Lat/Lon</div><div class="metric-value" id="captureLatLon">--</div></div>
+      <div class="metric"><div class="metric-label">Pending Leg</div><div class="metric-value" id="pendingLeg">--</div></div>
+      <div class="metric"><div class="metric-label">Total if Saved</div><div class="metric-value" id="pendingTotal">--</div></div>
+      <div class="metric"><div class="metric-label">Leg GPS points</div><div class="metric-value" id="pendingLegPoints">--</div></div>
+    </div>
+    <button class="btn-good" id="saveWpBtn" disabled>Save Waypoint</button>
+  </div>
+
+  <div class="card">
+    <h2>4. Route Summary</h2>
+    <div class="big-result">
+      <div class="metric"><div class="metric-label">Points Saved</div><div class="metric-value" id="pointsSaved">0</div></div>
+      <div class="metric"><div class="metric-label">Total Distance</div><div class="metric-value" id="totalDistance">0.000 km</div></div>
+      <div class="metric"><div class="metric-label">Last Saved Leg</div><div class="metric-value" id="lastLeg">--</div></div>
+      <div class="metric"><div class="metric-label">Last Waypoint</div><div class="metric-value" id="lastWaypoint">--</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>5. Saved Waypoints</h2>
+    <div id="pointList"><div class="small">No waypoints saved yet.</div></div>
+  </div>
+
+  <div class="card">
+    <h2>6. Data / Save / Load</h2>
+    <button class="btn-primary" id="importFieldBtnData">Import from GPS Field</button>
+    <div class="small">Use this to load the GPS Field export file, for example Deep_south_Day_1_GPS_locations_v12.json.</div>
+    <button class="btn-secondary" id="saveJsonBtn">Save Distance Session</button>
+    <button class="btn-secondary" id="loadJsonBtn">Load Distance Session</button>
+    <button class="btn-secondary" id="exportCsvBtn">Export Distance CSV</button>
+    <input id="loadFile" type="file" accept="application/json,.json" style="display:none">
+    <button class="btn-bad" id="resetBtn">Reset Distance Route</button>
+  </div>
+</div>
+<script>
+const APP_VERSION="8.0",CAPTURE_SAMPLES=20,GPS_WARMUP_MS=60000,CAPTURE_SETTLE_MS=30000,GOOD_ACCURACY_MAX=4.5,LEG_ACCEPT_ACC_MAX=30;
+let gpsWatchId=null,gpsStartedAt=0,lastLiveFix=null,lastLegFix=null,lastUiTick=0;
+let recording=false,legDistanceM=0,legGpsPoints=0,legGpsRejected=0,totalDistanceM=0,waypoints=[],pending=null;
+let importedFieldRoute=null,currentTargetIndex=0;
+let captureWatchId=null,captureSamples=[],captureRejectedCount=0,captureStartedAt=0,captureSettled=false;
+let wakeLock=null,wakeWanted=false;
+const $=id=>document.getElementById(id);document.addEventListener("contextmenu",e=>e.preventDefault());
+function km(m){return (m/1000).toFixed(3)+" km"}
+function nowIso(){return new Date().toISOString()}
+function gpsWarmupDone(){return gpsStartedAt&&Date.now()-gpsStartedAt>=GPS_WARMUP_MS}
+function gpsWarmupLeft(){return Math.max(0,Math.ceil((GPS_WARMUP_MS-(Date.now()-gpsStartedAt))/1000))}
+function haversineMeters(a,b){const R=6371000,lat1=a.lat*Math.PI/180,lat2=b.lat*Math.PI/180,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180,x=dLon*Math.cos((lat1+lat2)/2),y=dLat;return Math.sqrt(x*x+y*y)*R}
+function averageSamples(samples){let weightedLat=0,weightedLon=0,weightSum=0,accSum=0,minAcc=Infinity,maxAcc=-Infinity;samples.forEach(s=>{const acc=Math.max(1,Number(s.accuracy||20)),w=1/(acc*acc);weightedLat+=s.lat*w;weightedLon+=s.lon*w;weightSum+=w;accSum+=acc;minAcc=Math.min(minAcc,acc);maxAcc=Math.max(maxAcc,acc)});const avg={lat:weightedLat/weightSum,lon:weightedLon/weightSum,accuracy:accSum/samples.length,minAccuracy:minAcc,maxAccuracy:maxAcc,samples:samples.length,time:Date.now()};let spreadSum=0,maxSpread=0;samples.forEach(s=>{s.distanceFromAverage=haversineMeters(s,avg);spreadSum+=s.distanceFromAverage;maxSpread=Math.max(maxSpread,s.distanceFromAverage)});avg.meanSpread=spreadSum/samples.length;avg.maxSpread=maxSpread;avg.firstLastDrift=haversineMeters(samples[0],samples[samples.length-1]);return avg}
+function qualityFor(point,rejected){if(!point)return{label:"--",cls:""};const spread=Number(point.meanSpread||0),drift=Number(point.firstLastDrift||0),rej=Number(rejected||0);if(spread>0.40||drift>1.50)return{label:"Poor",cls:"quality-bad"};if(spread>=0.20||drift>=0.75||rej>20)return{label:"Repeat Recommended",cls:"quality-warn"};if(rej===0&&spread<0.10&&drift<0.25)return{label:"Excellent",cls:"quality-good"};if(spread<0.20&&drift<0.75)return{label:"Good",cls:"quality-good"};return{label:"Repeat Recommended",cls:"quality-warn"}}
+function beep(){try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;const ac=new AC(),start=ac.currentTime,end=start+5.0,master=ac.createGain();master.gain.setValueAtTime(0.0001,start);master.gain.linearRampToValueAtTime(0.30,start+0.05);master.gain.setValueAtTime(0.30,end-0.10);master.gain.linearRampToValueAtTime(0.0001,end);master.connect(ac.destination);for(let t=0;t<5.0;t+=0.50){const o=ac.createOscillator(),g=ac.createGain();o.type="square";o.frequency.setValueAtTime(880,start+t);o.frequency.setValueAtTime(660,start+t+0.18);g.gain.setValueAtTime(0.0001,start+t);g.gain.linearRampToValueAtTime(0.8,start+t+0.03);g.gain.setValueAtTime(0.8,start+t+0.26);g.gain.linearRampToValueAtTime(0.0001,start+t+0.34);o.connect(g);g.connect(master);o.start(start+t);o.stop(start+t+0.36)}setTimeout(()=>{try{ac.close()}catch(e){}},5400)}catch(e){}}
+function startGps(){gpsStartedAt=Date.now();if(!navigator.geolocation){$("gpsState").textContent="GPS not supported";return}gpsWatchId=navigator.geolocation.watchPosition(pos=>{const p={lat:pos.coords.latitude,lon:pos.coords.longitude,accuracy:pos.coords.accuracy,speed:pos.coords.speed,time:pos.timestamp||Date.now()};lastLiveFix=p;handleLegPoint(p);updateDisplay();},err=>{$("gpsState").textContent="GPS error: "+err.message;$("gpsState").className="big-value"},{enableHighAccuracy:true,maximumAge:0,timeout:15000});setInterval(updateDisplay,500)}
+function handleLegPoint(p){if(!recording||captureWatchId)return;if(!p.accuracy||p.accuracy>LEG_ACCEPT_ACC_MAX){legGpsRejected++;saveLocal();return}if(lastLegFix){const d=haversineMeters(lastLegFix,p);if(Number.isFinite(d)&&d<150){legDistanceM+=d}else{legGpsRejected++}}lastLegFix=p;legGpsPoints++;saveLocal()}
+function updateCaptureButton(){const btn=$("captureBtn");if(captureWatchId){btn.disabled=true;if(!captureSettled){btn.textContent="Gathering starts in "+Math.max(0,Math.ceil((CAPTURE_SETTLE_MS-(Date.now()-captureStartedAt))/1000));}else{btn.textContent="Gathering "+Math.min(captureSamples.length,CAPTURE_SAMPLES)+" / "+CAPTURE_SAMPLES;}return}if(!gpsWarmupDone()){btn.disabled=true;btn.textContent="GPS Warm-up "+gpsWarmupLeft();return}if(!lastLiveFix){btn.disabled=true;btn.textContent="Waiting for GPS";return}btn.disabled=false;btn.textContent=pending?"Gather Again":"Gather Waypoint GPS"}
+function updateDisplay(){updateCaptureButton();$("liveLatLon").textContent=lastLiveFix?lastLiveFix.lat.toFixed(7)+", "+lastLiveFix.lon.toFixed(7):"--";$("liveAccuracy").textContent=lastLiveFix&&lastLiveFix.accuracy?Number(lastLiveFix.accuracy).toFixed(1)+" m":"--";$("captureLiveAccuracy").textContent=$("liveAccuracy").textContent;$("liveSpeed").textContent=lastLiveFix&&lastLiveFix.speed!==null&&lastLiveFix.speed!==undefined?(lastLiveFix.speed*3.6).toFixed(1)+" km/h":"--";$("liveDistance").textContent=km(legDistanceM);$("drivingPoints").textContent=legGpsPoints+" accepted / "+legGpsRejected+" rejected";$("gpsState").textContent=!gpsWarmupDone()?"Warm-up "+gpsWarmupLeft()+" sec":(lastLiveFix?"GPS live":"Waiting for GPS");$("gpsAge").textContent=lastLiveFix?Math.max(0,Math.round((Date.now()-lastLiveFix.time)/1000))+" sec":"--";$("recordBtn").textContent=recording?"Stop Recording":"Start Recording";$("recordBtn").className=recording?"btn-good":"btn-warn";$("recordStatus").textContent=recording?"Recording ON":"Recording PAUSED - distance not being added";$("recordStatus").className=recording?"status good":"status wait";$("sampleDisplay").value=(pending?CAPTURE_SAMPLES:captureSamples.length)+" / "+CAPTURE_SAMPLES;$("captureRejected").textContent=String(captureRejectedCount);if(pending){const q=qualityFor(pending.capture,pending.captureRejected);$("captureQuality").textContent=q.label;$("captureQuality").className="metric-value "+q.cls;$("captureLatLon").textContent=pending.capture.lat.toFixed(7)+", "+pending.capture.lon.toFixed(7);$("pendingLeg").textContent=km(pending.legDistanceM);$("pendingTotal").textContent=km(pending.totalIfSavedM);$("pendingLegPoints").textContent=pending.legGpsPoints+" accepted / "+pending.legGpsRejected+" rejected";$("saveWpBtn").disabled=false;$("captureStatus").textContent="Pending capture ready - save or gather again";$("captureStatus").className="status good"}else{$("captureQuality").textContent="--";$("captureQuality").className="metric-value";$("captureLatLon").textContent="--";$("pendingLeg").textContent="--";$("pendingTotal").textContent="--";$("pendingLegPoints").textContent="--";$("saveWpBtn").disabled=true;if(captureWatchId){$("captureStatus").textContent=captureSettled?"Collecting accepted samples":"Settling GPS before sampling";$("captureStatus").className="status wait"}else{$("captureStatus").textContent=gpsWarmupDone()?"Ready to gather waypoint GPS":"Waiting for GPS warm-up";$("captureStatus").className=gpsWarmupDone()?"status good":"status wait"}}$("pointsSaved").textContent=String(waypoints.length);$("totalDistance").textContent=km(totalDistanceM);$("lastLeg").textContent=waypoints.length?km(waypoints[waypoints.length-1].legDistanceM):"--";$("lastWaypoint").textContent=waypoints.length?(waypoints[waypoints.length-1].wpNumber+" "+(waypoints[waypoints.length-1].note||"")):"--";renderFieldRoute();renderPointList();}
+function startCapture(){if(captureWatchId)return;if(!gpsWarmupDone()){alert("Allow GPS warm-up to complete.");return}if(!lastLiveFix){alert("Waiting for live GPS fix.");return}pending=null;captureSamples=[];captureRejectedCount=0;captureStartedAt=Date.now();captureSettled=false;captureWatchId=navigator.geolocation.watchPosition(pos=>{const p={lat:pos.coords.latitude,lon:pos.coords.longitude,accuracy:pos.coords.accuracy,time:pos.timestamp||Date.now()};lastLiveFix=p;if(!captureSettled&&Date.now()-captureStartedAt>=CAPTURE_SETTLE_MS)captureSettled=true;if(captureSettled){if(p.accuracy&&p.accuracy<=GOOD_ACCURACY_MAX)captureSamples.push(p);else captureRejectedCount++}if(captureSamples.length>=CAPTURE_SAMPLES){navigator.geolocation.clearWatch(captureWatchId);captureWatchId=null;const cap=averageSamples(captureSamples);const isStart=waypoints.length===0;const legM=isStart?0:legDistanceM;pending={capture:cap,captureRejected:captureRejectedCount,wpNumber:$("wpNumber").value.trim()||String(waypoints.length+1),note:$("wpNote").value.trim(),legDistanceM:legM,totalIfSavedM:totalDistanceM+legM,legGpsPoints:legGpsPoints,legGpsRejected:legGpsRejected,createdAt:nowIso()};beep();saveLocal();}updateDisplay();},err=>{captureWatchId=null;$("captureStatus").textContent="GPS error: "+err.message;$("captureStatus").className="status bad";updateDisplay();},{enableHighAccuracy:true,maximumAge:0,timeout:5000});updateDisplay();}
+function saveWaypoint(){if(!pending)return;const q=qualityFor(pending.capture,pending.captureRejected);const p={id:Date.now()+"_"+Math.random().toString(16).slice(2),wpNumber:pending.wpNumber,note:pending.note,lat:pending.capture.lat,lon:pending.capture.lon,gpsQuality:q.label,samples:CAPTURE_SAMPLES,captureRejected:pending.captureRejected,legDistanceM:pending.legDistanceM,totalDistanceM:pending.totalIfSavedM,legGpsPoints:pending.legGpsPoints,legGpsRejected:pending.legGpsRejected,timestamp:pending.createdAt};waypoints.push(p);totalDistanceM=p.totalDistanceM;pending=null;legDistanceM=0;legGpsPoints=0;legGpsRejected=0;lastLegFix=lastLiveFix?{...lastLiveFix}:null;$("wpNumber").value=nextWpNumber($("wpNumber").value);$("wpNote").value="";saveLocal();updateDisplay();}
+function nextWpNumber(v){const m=String(v||"").match(/^(.*?)(\d+)$/);if(m)return m[1]+String(Number(m[2])+1);return String(waypoints.length+1)}
+async function toggleRecording(){recording=!recording;if(recording){lastLegFix=lastLiveFix?{...lastLiveFix}:null;wakeWanted=true;await requestWake()}else{lastLegFix=null;wakeWanted=false;await releaseWake()}saveLocal();updateWakeDisplay();updateDisplay()}
+async function requestWake(){try{if(!("wakeLock" in navigator)){wakeLock=null;return}wakeLock=await navigator.wakeLock.request("screen");wakeLock.addEventListener("release",()=>{wakeLock=null;updateWakeDisplay()});}catch(e){wakeLock=null}}
+async function releaseWake(){try{if(wakeLock)await wakeLock.release()}catch(e){}wakeLock=null;}
+function updateWakeDisplay(){if(wakeWanted&&wakeLock){$("wakeStatus").textContent="Stay Awake ON while recording";$("wakeStatus").className="status good"}else if(wakeWanted&&!('wakeLock' in navigator)){$("wakeStatus").textContent="Stay Awake unavailable - keep screen on manually";$("wakeStatus").className="status wait"}else if(wakeWanted){$("wakeStatus").textContent="Stay Awake not active - keep screen on manually";$("wakeStatus").className="status wait"}else{$("wakeStatus").textContent="Stay Awake OFF - recording paused";$("wakeStatus").className="status wait"}}
+document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&wakeWanted)await requestWake();updateWakeDisplay();});
+function normaliseFieldRoute(data){
+  if(!data||!Array.isArray(data.locations))throw new Error("No locations[] in GPS Field file");
+  const targets=data.locations.filter(l=>l&&l.pointA&&Number.isFinite(Number(l.pointA.lat))&&Number.isFinite(Number(l.pointA.lon))).map((l,i)=>({
+    routeIndex:Number(l.routeIndex||i+1),
+    type:String(l.type||"Waypoint"),
+    number:String(l.number||i+1),
+    name:String(l.name||((l.type||"Waypoint")+" "+(l.number||i+1))),
+    notes:String(l.notes||""),
+    captureQuality:String(l.captureQuality||""),
+    lat:Number(l.pointA.lat),
+    lon:Number(l.pointA.lon),
+    hasTripLine:!!(l.lineStartPoint&&l.lineEndPoint),
+    lineStartPoint:l.lineStartPoint||null,
+    lineEndPoint:l.lineEndPoint||null,
+    roadBearing:l.roadBearing,
+    timingLineBearing:l.timingLineBearing
+  })).sort((a,b)=>a.routeIndex-b.routeIndex);
+  if(!targets.length)throw new Error("No valid Point A targets found");
+  return {app:"GPS Field Import",sourceApp:String(data.app||""),sourceVersion:String(data.version||""),datasetName:String(data.datasetName||""),rallyTitle:String(data.rallyTitle||""),day:String(data.day||""),importedAt:nowIso(),targets};
+}
+function importGpsFieldData(data){
+  importedFieldRoute=normaliseFieldRoute(data);
+  currentTargetIndex=0;
+  saveLocal();
+  updateDisplay();
+}
+function loadGpsFieldFile(file){
+  const r=new FileReader();
+  r.onload=()=>{try{importGpsFieldData(JSON.parse(r.result));alert("Imported "+importedFieldRoute.targets.length+" GPS Field targets.");}catch(e){alert("Could not import GPS Field file: "+e.message)}};
+  r.readAsText(file);
+}
+function changeTarget(delta){
+  if(!importedFieldRoute||!importedFieldRoute.targets.length)return;
+  currentTargetIndex=Math.max(0,Math.min(importedFieldRoute.targets.length-1,currentTargetIndex+delta));
+  saveLocal();
+  updateDisplay();
+}
+function renderFieldRoute(){
+  const route=importedFieldRoute,wrap=$("fieldTargetList");
+  if(!route||!route.targets||!route.targets.length){
+    $("fieldRouteName").textContent="--";$("fieldRallyDay").textContent="--";$("fieldTargetCount").textContent="0";$("fieldCurrentTarget").textContent="--";wrap.innerHTML='<div class="small">No GPS Field route imported yet.</div>';$("prevTargetBtn").disabled=true;$("nextTargetBtn").disabled=true;return;
+  }
+  currentTargetIndex=Math.max(0,Math.min(route.targets.length-1,currentTargetIndex));
+  const current=route.targets[currentTargetIndex];
+  $("fieldRouteName").textContent=route.datasetName||"Imported GPS Field route";
+  $("fieldRallyDay").textContent=[route.rallyTitle,route.day].filter(Boolean).join(" / ")||"--";
+  $("fieldTargetCount").textContent=String(route.targets.length);
+  $("fieldCurrentTarget").textContent=(currentTargetIndex+1)+". "+current.name+(current.notes?" — "+current.notes:"");
+  $("prevTargetBtn").disabled=currentTargetIndex<=0;
+  $("nextTargetBtn").disabled=currentTargetIndex>=route.targets.length-1;
+  wrap.innerHTML="";
+  route.targets.forEach((t,i)=>{const qcls=t.captureQuality==="Poor"?"bad":(t.captureQuality==="Repeat Recommended"?"warn":"good");const div=document.createElement("div");div.className="point "+(i===currentTargetIndex?"target ":"")+(i<currentTargetIndex?"done":"");div.innerHTML='<strong>'+(i+1)+'. '+escapeHtml(t.type)+' '+escapeHtml(t.number)+'</strong> <span class="badge '+qcls+'">'+escapeHtml(t.captureQuality||'GPS Field')+'</span><br>'+escapeHtml(t.name)+(t.notes?'<br>'+escapeHtml(t.notes):'')+'<br>Lat/Lon: '+t.lat.toFixed(7)+', '+t.lon.toFixed(7)+'<br>'+(t.hasTripLine?'Trip line available':'Location only');wrap.appendChild(div);});
+}
+function renderPointList(){const wrap=$("pointList");if(!waypoints.length){wrap.innerHTML='<div class="small">No waypoints saved yet.</div>';return}wrap.innerHTML="";waypoints.forEach((p,i)=>{const qcls=p.gpsQuality==="Poor"?"bad":(p.gpsQuality==="Repeat Recommended"?"warn":"good");const div=document.createElement("div");div.className="point "+(i===0?"start":"");div.innerHTML='<strong>'+(i===0?'Start ':'WP ')+escapeHtml(p.wpNumber)+'</strong> <span class="badge '+qcls+'">'+escapeHtml(p.gpsQuality)+'</span><br>'+escapeHtml(p.note||'')+'<br>Leg: '+km(p.legDistanceM)+' | Total: '+km(p.totalDistanceM)+'<br>Lat/Lon: '+p.lat.toFixed(7)+', '+p.lon.toFixed(7)+'<br>Leg GPS points: '+p.legGpsPoints+' accepted / '+p.legGpsRejected+' rejected';wrap.appendChild(div)})}
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function dataObj(){return{app:"GPS Distance Recorder",version:APP_VERSION,exportedAt:nowIso(),settings:{captureSamples:CAPTURE_SAMPLES,captureSettleMs:CAPTURE_SETTLE_MS,goodAccuracyMax:GOOD_ACCURACY_MAX},recording,totalDistanceM,legDistanceM,legGpsPoints,legGpsRejected,waypoints,pending,importedFieldRoute,currentTargetIndex}}
+function saveLocal(){try{localStorage.setItem("gpsDistanceRecorderV8",JSON.stringify(dataObj()))}catch(e){}}
+function loadLocal(){try{const raw=localStorage.getItem("gpsDistanceRecorderV6");if(!raw)return;applyData(JSON.parse(raw),false)}catch(e){}}
+function applyData(data,fromFile){if(!data)return;waypoints=Array.isArray(data.waypoints)?data.waypoints:[];totalDistanceM=Number(data.totalDistanceM||0);legDistanceM=Number(data.legDistanceM||0);legGpsPoints=Number(data.legGpsPoints||0);legGpsRejected=Number(data.legGpsRejected||0);recording=data.recording!==false;pending=data.pending||null;importedFieldRoute=data.importedFieldRoute||null;currentTargetIndex=Number(data.currentTargetIndex||0);const n=waypoints.length?nextWpNumber(waypoints[waypoints.length-1].wpNumber):"1";$("wpNumber").value=n;if(fromFile)saveLocal();updateDisplay()}
+function download(filename,text,type){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)}
+function saveJson(){download("gps_distance_recorder_v8_0.json",JSON.stringify(dataObj(),null,2),"application/json")}
+function exportCsv(){const header=["waypointNo","note","lat","lon","gpsQuality","samples","captureRejected","legDistanceKm","totalDistanceKm","legGpsPoints","legGpsRejected","timestamp"];const rows=waypoints.map(p=>[p.wpNumber,p.note,p.lat,p.lon,p.gpsQuality,p.samples,p.captureRejected,(p.legDistanceM/1000).toFixed(3),(p.totalDistanceM/1000).toFixed(3),p.legGpsPoints,p.legGpsRejected,p.timestamp]);const csv=[header,...rows].map(r=>r.map(x=>'"'+String(x??"").replace(/"/g,'""')+'"').join(",")).join("\n");download("gps_distance_recorder_v8_0.csv",csv,"text/csv")}
+function resetRoute(){if(!confirm("Reset route and current leg?"))return;waypoints=[];pending=null;totalDistanceM=0;legDistanceM=0;legGpsPoints=0;legGpsRejected=0;lastLegFix=lastLiveFix?{...lastLiveFix}:null;$("wpNumber").value="1";$("wpNote").value="";saveLocal();updateDisplay()}
+$("captureBtn").addEventListener("click",startCapture);$("saveWpBtn").addEventListener("click",saveWaypoint);$("recordBtn").addEventListener("click",toggleRecording);$("saveJsonBtn").addEventListener("click",saveJson);$("exportCsvBtn").addEventListener("click",exportCsv);$("resetBtn").addEventListener("click",resetRoute);$("loadJsonBtn").addEventListener("click",()=>$("loadFile").click());$("loadFile").addEventListener("change",ev=>{const f=ev.target.files&&ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{applyData(JSON.parse(r.result),true)}catch(e){alert("Could not load JSON.")}};r.readAsText(f)});$("importFieldBtn").addEventListener("click",()=>$("fieldImportFile").click());$("importFieldBtnData").addEventListener("click",()=>$("fieldImportFile").click());$("prevTargetBtn").addEventListener("click",()=>changeTarget(-1));$("nextTargetBtn").addEventListener("click",()=>changeTarget(1));$("fieldImportFile").addEventListener("change",ev=>{const f=ev.target.files&&ev.target.files[0];if(!f)return;loadGpsFieldFile(f);ev.target.value="";});
+loadLocal();startGps();updateWakeDisplay();updateDisplay();
+</script>
+</body>
+</html>
